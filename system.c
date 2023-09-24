@@ -108,31 +108,41 @@ void add_to_execution(struct system *s, struct task *t) {
 }
 
 void process_task(struct task* t, struct system *s) {
-	printf("Received task for processing: %d %d %d %d\n", t->c, t->a, t->p, t->pol);
+	
+	// Processing a task means adding it in the awaiting queue if its arrival time != 0 or adding it to the execution queue if its arrival time == 0
+	// Processing atask also means allocating a new scheduling queue for its priority level and scheduling politic (FIFO or RR) and adding the task to it.
+	// Obs.: If there is already a scheduling queue for its priority level, the task is simply appended to it
 	
 	if(t->a > 0) add_to_awaiting(s, t);
 	else add_to_execution(s, t);
 
-	// Create or add a scheduling queue for the task with its policy
-	struct scheduling_queue *current_sq = s->scheduling_sentinels;
-	while(1) {
-		if((current_sq->next == s->scheduling_sentinels) && t->p != current_sq->priority) {
-			// If it has reached the end of the queue
+	// About scheduling queue and scheduling nodes: the system has a scheduling queue sentinel that can lead to all the scheduling queues created on this processes,
+	// each with its respective priority level and scheduling policy. Each scheduling queue, therefore, has a scheduling node sentinel that can lead to all members of this
+	// scheduling queue. However, these members are not directly tasks, but also scheduling nodes. As a matter of fact, a scheduling node represents a task in this context of
+	// scheduling queues, such is that a scheduling node has a pointer to the task it represents.
+	//
+	// Obs.: The system was actually built that way because of two simple reasons: (1) bad software project planning, (2) arriving queue and execution queue are actually disjoint sets,
+	// which means that a task having pointers to its previous and next elements do not imply inconsistence, given a task is either on one or the other queue at any point in time. 
+	// However this does not occur with scheduling queues, given that, at any point in time, a task might be eiter at awaiting or execution queue, but always in a scheduling queue, which implies 
+	// they must have two different entities to represent their previous and next elements in the different queues, which will not ever be the same for both queues. 
+	// That is why scheduling nodes are required.
 
-			// Define and initializes a new scheduling queue for this priority level
+	struct scheduling_queue *current_sq = s->scheduling_sentinels->next;
+	while(1) {
+		if(current_sq == s->scheduling_sentinels) {
+			// Reached the end of the queue, meaning no scheduling queue for this task's priority 
+			// level has been created yet.
 			struct scheduling_queue *new_sq = malloc(sizeof(struct scheduling_queue));
 			
 			new_sq->priority = t->p;
 			new_sq->pol = t->pol;
 			
-			// Creates sentinel node for scheduling queue
 			struct scheduling_node *ss = malloc(sizeof(struct scheduling_node));
 			ss->t = NULL;
 			ss->next = ss;
 			ss->prev = ss;
 			new_sq->scheduling_sentinel = ss;
 			
-			// Create scheduling node for task and add it to its new scheduling queue
 			struct scheduling_node *new_sn = malloc(sizeof(struct scheduling_node));
 			new_sn->t = t;
 			new_sn->next = ss;
@@ -140,11 +150,9 @@ void process_task(struct task* t, struct system *s) {
 			new_sn->prev = ss;
 			ss->prev = new_sn;
 			
-			// Add new scheduling queue in list (ordered by priority)
 			current_sq = s->scheduling_sentinels->next;
 			while(1) {
 				if(current_sq == s->scheduling_sentinels) {
-					// If it has reached the end of the queue	
 					new_sq->next = current_sq;
 					new_sq->prev = current_sq->prev;
 					current_sq->prev->next = new_sq;
@@ -154,7 +162,6 @@ void process_task(struct task* t, struct system *s) {
 					if((new_sq->priority < current_sq->priority)) {
 						new_sq->next = current_sq;
 						new_sq->prev = current_sq->prev;
-
 						current_sq->prev->next = new_sq;
 						current_sq->prev = new_sq;
 						break;
@@ -166,19 +173,17 @@ void process_task(struct task* t, struct system *s) {
 			break;
 		} else {
 			if(t->p == current_sq->priority) {
-				// If there is already a priority queue for this task's priority level
-				// it goes to the end of the queue
+				// If a scheduling queue with same priority level as tasks's has been found,
+				// append task to it.
 				struct scheduling_node *new_sn = malloc(sizeof(struct scheduling_node));
 				new_sn->t = t;
-
 				current_sq->scheduling_sentinel->prev->next = new_sn;
 				new_sn->prev = current_sq->scheduling_sentinel->prev;
 				new_sn->next = current_sq->scheduling_sentinel;
 				current_sq->scheduling_sentinel->prev = new_sn;
 				break;
-			}
+			} else current_sq = current_sq->next;
 		}
-		current_sq = current_sq->next;
 	}
 }
 
