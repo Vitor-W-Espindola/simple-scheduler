@@ -211,30 +211,8 @@ struct task ** check_for_arriving_tasks(struct system *s, int * len) {
 		return arriving_tasks;
 }
 
-struct task ** check_for_ending_tasks(struct system *s, int * len) {
-		struct task **ending_tasks = malloc(0);
-		struct task *current_task = s->execution_sentinel->next;
-		
-		int i = 0;
-
-		*(len) = 0;
-		
-		while(1) {
-			if(current_task == s->execution_sentinel) {
-				break;
-			} else {
-				if(current_task->c == 0) {
-					ending_tasks = realloc(ending_tasks, (++(*(len))) * sizeof(struct task *));
-					ending_tasks[i] = current_task;
-					i++;
-					break;
-				}
-			}
-			current_task = current_task->next;
-		}
-		
-		
-		return ending_tasks;
+struct task * check_for_ending_task(struct system *s) {
+		return s->execution_sentinel->next != NULL && s->execution_sentinel->next->c == 0 ? s->execution_sentinel->next : NULL;
 }
 
 
@@ -255,7 +233,7 @@ void remove_from_execution(struct system *s, struct task *t) {
 			break;
 		} else {
 			if(current_sq->priority == t->p) {
-				// Find its schediling node
+				// Find its scheduling node
 				struct scheduling_node *current_sn = current_sq->scheduling_sentinel->next;
 				while(1) {
 					if(current_sn == current_sq->scheduling_sentinel) {
@@ -319,63 +297,6 @@ struct task * interrogate_scheduling_queue(struct system *s, struct task *t) {
 	return t;
 }
 
-int update_execution(struct system *s, struct task **arriving_tasks, struct task **ending_tasks, int len_a, int len_e) {
-
-		printf("Updating execution...\n");
-
-		int i;
-		struct task * running;
-		struct task * next_to_be_runned;
-		
-		// Removing tasks of execution queue
-		for(i = 0; i < len_e; i++)
-			remove_from_execution(s, ending_tasks[i]);
-		
-		// a's--
-		struct task *current_task = s->awaiting_sentinel->next;
-		while(1) {
-			if(current_task == s->awaiting_sentinel) break;
-			(current_task->a)--;
-			current_task = current_task->next;
-		}
-		
-		// Move arriving tasks to execution queue
-		for(i = 0; i < len_a; i++) {
-			move_to_execution(s, arriving_tasks[i]);
-		}
-
-		running = s->execution_sentinel->next;
-		
-		if(running == s->execution_sentinel) {
-			if(s->awaiting_sentinel->next == s->awaiting_sentinel) return 1;
-			else return '.';
-		} else {
-		
-			// c--
-			// (running->c)--;
-			next_to_be_runned = interrogate_scheduling_queue(s, running);
-			(next_to_be_runned->c)--;
-			if(next_to_be_runned != running) {
-				// change next_to_be_running neighbours
-				next_to_be_runned->prev->next = next_to_be_runned->next;
-				next_to_be_runned->next->prev = next_to_be_runned->prev;
-				
-				// put next_to_be_running in front of execution queue
-				next_to_be_runned->prev = s->execution_sentinel;
-				next_to_be_runned->next = running;
-
-				running->prev = next_to_be_runned;
-				s->execution_sentinel->next = next_to_be_runned;
-			}
-		}
-
-		
-		
-		printf("NEXT TO BE RUNNED %c\n", next_to_be_runned->name);	
-		
-		return next_to_be_runned->name;
-}
-
 void free_scheduling_queues(struct system *s) {
 	struct scheduling_queue *current_sq = s->scheduling_sentinels->next;
 	struct scheduling_queue *next_sq_to_be_freed = current_sq;
@@ -396,48 +317,82 @@ void free_scheduling_queues(struct system *s) {
 
 char *run(struct system *s) {
 	
+	// Running the system after giving its initial conditions consists of a loop with numbers decrementation and manipulation of the queues, 
+	// where at the end of any complete cycle the task name is appended to the string which represents the scale of execution. 
+	//
+	// It can be summarized as follows:
+	// - Gather all arriving tasks (arrival time = 0) from awaiting queue and the ending task (computation = 0), if there is any, from execution queue;
+	// - Remove those arriving tasks from awaiting queue and moving all to execution queue while ordering it by priority.
+	// - Decrement by one the arrival time of all those tasks which remained on the arriving queue.
+	// - Removing the ending task from the execution queue. This also means removing this tasks from its scheduling queue.
+	// - Take the first element of the execution queue and interrogate its scheduling queue: 
+	// 		"Which task from your queue is the next one to be runned accordingly to your policy? Gimme its name and keep doing your damn job >:("
+	// - Run the task obtained from the interrogation. 
+	//
+	// Obs.: As said ealier, running a task actually means appending its name to the string which represents the scale of execution that is being built by the scheduler. 
+
 	int out_index = 0;
 	int out_len = 1;
 	char *out = malloc(out_len);
 
 	printf("Running system...\n");
 	while(1) {
-		int i, len_a, len_e = 0;
+		int i, len_a;
 		struct task ** arriving_tasks = check_for_arriving_tasks(s, &len_a);
-		struct task ** ending_tasks = check_for_ending_tasks(s, &len_e);
-
+		struct task * ending_task = check_for_ending_task(s);
 		
-		if(len_a > 0) {
-			printf("Listing arriving tasks...\n");
-			for(i = 0; i < len_a; i++) printf("\tTask named %c\n", arriving_tasks[i]->name);
+		char running_name;
+	
+		struct task * current_task;	
+		struct task * running;
+		struct task * to_be_runned;
+
+		for(i = 0; i < len_a; i++)
+			move_to_execution(s, arriving_tasks[i]);
+		
+		if(ending_task != NULL)
+			remove_from_execution(s, ending_task);	
+
+		current_task = s->awaiting_sentinel->next;
+		while(1) {
+			if(current_task == s->awaiting_sentinel) break;
+			(current_task->a)--;
+			current_task = current_task->next;
 		}
 
-		if(len_e > 0) { 
-			printf("Listing ending tasks...\n");
-			for(i = 0; i < len_e; i++) printf("\tTask named %c\n", ending_tasks[i]->name);
-		}
-
+		running = s->execution_sentinel->next;
 		
-		char running_name = update_execution(s, arriving_tasks, ending_tasks, len_a, len_e);
+		if(running == s->execution_sentinel) {
+			if(s->awaiting_sentinel->next == s->awaiting_sentinel) running_name = 1;
+			else running_name = '.';
+		} else {
+			to_be_runned = interrogate_scheduling_queue(s, running);
+			(to_be_runned->c)--;
+			if(to_be_runned != running) {
+				
+				// change next_to_be_running neighbours
+				to_be_runned->prev->next = to_be_runned->next;
+				to_be_runned->next->prev = to_be_runned->prev;
+				
+				// put next_to_be_running in front of execution queue
+				to_be_runned->prev = s->execution_sentinel;
+				to_be_runned->next = running;
+
+				running->prev = to_be_runned;
+				s->execution_sentinel->next = to_be_runned;
+			}
+			running_name = to_be_runned->name;
+		}
 		
 		free(arriving_tasks);
-		free(ending_tasks);
-
-		printf("\n\n");
-		// print_awaiting(s);
-		print_execution(s);
-		// print_scheduling_queues(s);
 
 		if(running_name == 1) break;
 
 		out = realloc(out, ++out_len);
 		out[out_index++] = running_name;
 	}
+
 	out[out_len - 1] = '\0';
-	
-	free_scheduling_queues(s);
-	printf("Are they gone??\n");
-	print_scheduling_queues(s);
 	return out;
 }
 

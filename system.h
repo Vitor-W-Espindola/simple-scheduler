@@ -12,7 +12,7 @@ void print_execution(struct system *s);
 void print_scheduling_queues(struct system *s);
 void process_task(struct task *t, struct system *s);
 struct task ** check_for_arriving_tasks(struct system *s, int * len);
-struct task ** check_for_ending_tasks(struct system *s, int *len);
+struct task * check_for_ending_task(struct system *s);
 void move_to_execution(struct system *s, struct task *t);
 void remove_from_execution(struct system *s, struct task *t);
 struct task * interrogate_scheduling_queue(struct system *s, struct task *t);
