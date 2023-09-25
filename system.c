@@ -7,7 +7,7 @@ void print_awaiting(struct system *s) {
 	printf("Printing awaiting queue...\n");
 	struct task *current_task = s->awaiting_sentinel;
 	while(1) {
-		printf("%c -> %c -> %c | (c = %d, a = %d, p = %d)\n", current_task->prev->name, current_task->name, current_task->next->name, current_task->c, current_task->a, current_task->p);
+		printf("%c -> %c -> %c | (c = %d, a = %d, p = %d, pol = %d)\n", current_task->prev->name, current_task->name, current_task->next->name, current_task->c, current_task->a, current_task->p, current_task->pol);
 		current_task = current_task->next;
 		if(current_task == s->awaiting_sentinel)
 			break;
@@ -19,7 +19,7 @@ void print_awaiting_reversed(struct system *s) {
 	printf("Printing awaiting queue reversed...\n");
 	struct task *current_task = s->awaiting_sentinel;
 	while(1) {
-		printf("%c -> %c -> %c | (c = %d, a = %d, p = %d)\n", current_task->prev->name, current_task->name, current_task->next->name, current_task->c, current_task->a, current_task->p);
+		printf("%c -> %c -> %c | (c = %d, a = %d, p = %d, pol = %d)\n", current_task->prev->name, current_task->name, current_task->next->name, current_task->c, current_task->a, current_task->p, current_task->pol);
 		current_task = current_task->prev;
 		if(current_task == s->awaiting_sentinel)
 			break;
@@ -30,7 +30,7 @@ void print_execution(struct system *s) {
 	printf("Printing execution queue...\n");
 	struct task *current_task = s->execution_sentinel;
 	while(1) {
-		printf("%c -> %c -> %c | (c = %d, a = %d, p = %d)\n", current_task->prev->name, current_task->name, current_task->next->name, current_task->c, current_task->a, current_task->p);
+		printf("%c -> %c -> %c | (c = %d, a = %d, p = %d, pol = %d)\n", current_task->prev->name, current_task->name, current_task->next->name, current_task->c, current_task->a, current_task->p, current_task->pol);
 		current_task = current_task->next;
 		if(current_task == s->execution_sentinel)
 			break;
@@ -132,10 +132,8 @@ void process_task(struct task* t, struct system *s) {
 		if(current_sq == s->scheduling_sentinels) {
 			// Reached the end of the queue, meaning no scheduling queue for this task's priority 
 			// level has been created yet.
-			struct scheduling_queue *new_sq = malloc(sizeof(struct scheduling_queue));
-			
+			struct scheduling_queue *new_sq = malloc(sizeof(struct scheduling_queue));	
 			new_sq->priority = t->p;
-			new_sq->pol = t->pol;
 			
 			struct scheduling_node *ss = malloc(sizeof(struct scheduling_node));
 			ss->t = NULL;
@@ -260,41 +258,38 @@ void remove_from_execution(struct system *s, struct task *t) {
 }
 
 struct task * interrogate_scheduling_queue(struct system *s, struct task *t) {
+	printf("Interrogation...\n");
+	struct task * to_be_runned;
 	struct scheduling_queue *current_sq = s->scheduling_sentinels->next;
 	while(1) {
 		if(current_sq == s->scheduling_sentinels) {	
 			break;
 		} else {
 			if(current_sq->priority == t->p) {
-				if(current_sq->pol == 1) {
-				// FIFO
-					return current_sq->scheduling_sentinel->next->t; 
-				}
-				else if(current_sq->pol == 2) {
-				// RR
-					// First element of the queue goes to the end
-					struct scheduling_node *current_sn = current_sq->scheduling_sentinel->next;
-					
-					// Change node after current_sn
+				struct scheduling_node *current_sn = current_sq->scheduling_sentinel->next;
+				if(current_sn->t->pol == 1) {
+				// FIFO - Only returns the first element of the scheduling queue, without moving it; 
+					to_be_runned = current_sn->t;
+				} else if(current_sn->t->pol == 2) {
+				// RR - Unlike FIFO, Round-Robin returns the first element but moves it to the end of the queue.
 					if (current_sn->next != current_sq->scheduling_sentinel) {
 						current_sn->next->prev = current_sq->scheduling_sentinel;
 						current_sq->scheduling_sentinel->prev->next = current_sn;
 
-						// Change sentinel node and current node
 						current_sq->scheduling_sentinel->next = current_sn->next;
 						current_sn->next = current_sq->scheduling_sentinel;
 						
 						current_sn->prev = current_sq->scheduling_sentinel->prev;
 						current_sq->scheduling_sentinel->prev = current_sn;
 					}
-					return current_sn->t;
-				}
-			} 
-			else current_sq = current_sq->next;
-				
-		};
-	}	
-	return t;
+					to_be_runned = current_sq->scheduling_sentinel->next->t;
+				} else	to_be_runned = NULL;
+			       	break;
+			} else current_sq = current_sq->next;
+		}
+	}
+	printf("to be runnned %c\n", to_be_runned->name);
+	return to_be_runned;	
 }
 
 void free_scheduling_queues(struct system *s) {
@@ -322,12 +317,12 @@ char *run(struct system *s) {
 	//
 	// It can be summarized as follows:
 	// - Gather all arriving tasks (arrival time = 0) from awaiting queue and the ending task (computation = 0), if there is any, from execution queue;
-	// - Remove those arriving tasks from awaiting queue and moving all to execution queue while ordering it by priority.
+	// - Remove those arriving tasks from awaiting queue and move all to execution queue while ordering it by priority.
 	// - Decrement by one the arrival time of all those tasks which remained on the arriving queue.
-	// - Removing the ending task from the execution queue. This also means removing this tasks from its scheduling queue.
+	// - Remove the ending task from the execution queue. This also means removing this task from its scheduling queue.
 	// - Take the first element of the execution queue and interrogate its scheduling queue: 
 	// 		"Which task from your queue is the next one to be runned accordingly to your policy? Gimme its name and keep doing your damn job >:("
-	// - Run the task obtained from the interrogation. 
+	// - Run the task obtained from the interrogatory and decrement by one its computation. 
 	//
 	// Obs.: As said ealier, running a task actually means appending its name to the string which represents the scale of execution that is being built by the scheduler. 
 
@@ -337,6 +332,11 @@ char *run(struct system *s) {
 
 	printf("Running system...\n");
 	while(1) {
+
+		// TODO: check order of interrogation and removing from scheduling queue
+		print_execution(s);
+		print_scheduling_queues(s);
+		
 		int i, len_a;
 		struct task ** arriving_tasks = check_for_arriving_tasks(s, &len_a);
 		struct task * ending_task = check_for_ending_task(s);
@@ -367,20 +367,15 @@ char *run(struct system *s) {
 			else running_name = '.';
 		} else {
 			to_be_runned = interrogate_scheduling_queue(s, running);
-			(to_be_runned->c)--;
 			if(to_be_runned != running) {
-				
-				// change next_to_be_running neighbours
 				to_be_runned->prev->next = to_be_runned->next;
 				to_be_runned->next->prev = to_be_runned->prev;
-				
-				// put next_to_be_running in front of execution queue
 				to_be_runned->prev = s->execution_sentinel;
 				to_be_runned->next = running;
-
 				running->prev = to_be_runned;
 				s->execution_sentinel->next = to_be_runned;
 			}
+			(to_be_runned->c)--;
 			running_name = to_be_runned->name;
 		}
 		
@@ -390,6 +385,8 @@ char *run(struct system *s) {
 
 		out = realloc(out, ++out_len);
 		out[out_index++] = running_name;
+		
+
 	}
 
 	out[out_len - 1] = '\0';

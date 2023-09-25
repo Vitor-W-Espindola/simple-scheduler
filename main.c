@@ -25,7 +25,6 @@ int main() {
 
 	struct scheduling_queue sqs;
 	sqs.priority = -1;
-	sqs.pol = -1;
 	sqs.scheduling_sentinel = NULL;
 	sqs.next = sqs.prev = &sqs;
 	s->scheduling_sentinels = &sqs;	
