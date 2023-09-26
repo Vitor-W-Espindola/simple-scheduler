@@ -119,12 +119,12 @@ void process_task(struct task* t, struct system *s) {
 
 	// About scheduling queue and scheduling nodes: the system has a scheduling queue sentinel that can lead to all the scheduling queues created on this processes,
 	// each with its respective priority level and scheduling policy. Each scheduling queue, therefore, has a scheduling node sentinel that can lead to all members of this
-	// scheduling queue. However, these members are not directly tasks, but also scheduling nodes. As a matter of fact, a scheduling node represents a task in this context of
-	// scheduling queues, such is that a scheduling node has a pointer to the task it represents.
+	// scheduling queue. However, these members are not tasks themselves, but scheduling nodes. As a matter of fact, a scheduling node represents a task in this context of
+	// scheduling queues, such is that a scheduling node has only a pointer to the task it represents.
 	//
 	// Obs.: The system was actually built that way because of two simple reasons: (1) bad software project planning, (2) arriving queue and execution queue are actually disjoint sets,
 	// which means that a task having pointers to its previous and next elements do not imply inconsistence, given a task is either on one or the other queue at any point in time. 
-	// However this does not occur with scheduling queues, given that, at any point in time, a task might be eiter at awaiting or execution queue, but always in a scheduling queue, which implies 
+	// However this does not occur with scheduling queues, given that, at any point in time, a task might be either at awaiting or execution queue, but always in a scheduling queue, which implies 
 	// they must have two different entities to represent their previous and next elements in the different queues, which will not ever be the same for both queues. 
 	// That is why scheduling nodes are required.
 
