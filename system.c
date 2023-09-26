@@ -109,7 +109,7 @@ void add_to_execution(struct system *s, struct task *t) {
 
 void process_task(struct task* t, struct system *s) {
 	
-	// Processing a task means adding it in the awaiting queue if its arrival time != 0 or adding it to the execution queue if its arrival time == 0
+	// Processing a task means adding it to the awaiting queue if its arrival time != 0 or adding it to the execution queue if its arrival time == 0
 	// Processing atask also means allocating a new scheduling queue for its priority level and scheduling politic (FIFO or RR) and adding the task to it.
 	// Obs.: If there is already a scheduling queue for its priority level, the task is simply appended to it
 	
@@ -171,8 +171,6 @@ void process_task(struct task* t, struct system *s) {
 			break;
 		} else {
 			if(t->p == current_sq->priority) {
-				// If a scheduling queue with same priority level as tasks's has been found,
-				// append task to it.
 				struct scheduling_node *new_sn = malloc(sizeof(struct scheduling_node));
 				new_sn->t = t;
 				current_sq->scheduling_sentinel->prev->next = new_sn;
@@ -225,20 +223,17 @@ void move_to_execution(struct system *s, struct task *t) {
 void remove_from_execution(struct system *s, struct task *t) {
 
 	struct scheduling_queue *current_sq = s->scheduling_sentinels->next;
-	// Find its scheduling queue
 	while(1) {
 		if(current_sq == s->scheduling_sentinels) {
 			break;
 		} else {
 			if(current_sq->priority == t->p) {
-				// Find its scheduling node
 				struct scheduling_node *current_sn = current_sq->scheduling_sentinel->next;
 				while(1) {
 					if(current_sn == current_sq->scheduling_sentinel) {
 						break;
 					} else {
 						if(current_sn->t->name == t->name) {
-							// Remove it from the list
 							current_sn->prev->next = current_sn->next;
 							current_sn->next->prev = current_sn->prev;
 							free(current_sn);
@@ -258,7 +253,6 @@ void remove_from_execution(struct system *s, struct task *t) {
 }
 
 struct task * interrogate_scheduling_queue(struct system *s, struct task *t) {
-	printf("Interrogation...\n");
 	struct task * to_be_runned;
 	struct scheduling_queue *current_sq = s->scheduling_sentinels->next;
 	while(1) {
@@ -272,6 +266,7 @@ struct task * interrogate_scheduling_queue(struct system *s, struct task *t) {
 					to_be_runned = current_sn->t;
 				} else if(current_sn->t->pol == 2) {
 				// RR - Unlike FIFO, Round-Robin returns the first element but moves it to the end of the queue.
+					to_be_runned = current_sq->scheduling_sentinel->next->t;
 					if (current_sn->next != current_sq->scheduling_sentinel) {
 						current_sn->next->prev = current_sq->scheduling_sentinel;
 						current_sq->scheduling_sentinel->prev->next = current_sn;
@@ -282,13 +277,11 @@ struct task * interrogate_scheduling_queue(struct system *s, struct task *t) {
 						current_sn->prev = current_sq->scheduling_sentinel->prev;
 						current_sq->scheduling_sentinel->prev = current_sn;
 					}
-					to_be_runned = current_sq->scheduling_sentinel->next->t;
 				} else	to_be_runned = NULL;
 			       	break;
 			} else current_sq = current_sq->next;
 		}
 	}
-	printf("to be runnned %c\n", to_be_runned->name);
 	return to_be_runned;	
 }
 
@@ -298,7 +291,6 @@ void free_scheduling_queues(struct system *s) {
 	while(1) {
 		current_sq = next_sq_to_be_freed;
 		if(current_sq == s->scheduling_sentinels) break;
-		printf("Freeing scheduling queue with priority %d...\n", current_sq->priority);
 		current_sq->prev->next = current_sq->next;
 		current_sq->next->prev = current_sq->prev;
 		
@@ -313,30 +305,25 @@ void free_scheduling_queues(struct system *s) {
 char *run(struct system *s) {
 	
 	// Running the system after giving its initial conditions consists of a loop with numbers decrementation and manipulation of the queues, 
-	// where at the end of any complete cycle the task name is appended to the string which represents the scale of execution. 
+	// where at the end of any completed cycle the task name is appended to the string which represents the scale of execution. 
 	//
-	// It can be summarized as follows:
+	// A cycle can be summarized as follows:
 	// - Gather all arriving tasks (arrival time = 0) from awaiting queue and the ending task (computation = 0), if there is any, from execution queue;
 	// - Remove those arriving tasks from awaiting queue and move all to execution queue while ordering it by priority.
 	// - Decrement by one the arrival time of all those tasks which remained on the arriving queue.
 	// - Remove the ending task from the execution queue. This also means removing this task from its scheduling queue.
-	// - Take the first element of the execution queue and interrogate its scheduling queue: 
+	// - Take the first element of the execution queue and interrogate it about its scheduling policy: 
 	// 		"Which task from your queue is the next one to be runned accordingly to your policy? Gimme its name and keep doing your damn job >:("
 	// - Run the task obtained from the interrogatory and decrement by one its computation. 
 	//
-	// Obs.: As said ealier, running a task actually means appending its name to the string which represents the scale of execution that is being built by the scheduler. 
+	// Obs.: As said ealier, running a task actually means appending its name to the string which represents the scale of execution that is being built up by the scheduler. 
 
 	int out_index = 0;
 	int out_len = 1;
 	char *out = malloc(out_len);
 
-	printf("Running system...\n");
 	while(1) {
 
-		// TODO: check order of interrogation and removing from scheduling queue
-		print_execution(s);
-		print_scheduling_queues(s);
-		
 		int i, len_a;
 		struct task ** arriving_tasks = check_for_arriving_tasks(s, &len_a);
 		struct task * ending_task = check_for_ending_task(s);
@@ -392,51 +379,3 @@ char *run(struct system *s) {
 	out[out_len - 1] = '\0';
 	return out;
 }
-
-/*
-void stop(struct system *s) {
-	
-	// Freeing awaiting queue
-	struct task * current_task = s->awaiting_sentinel->next;
-	struct task * task_to_be_freed;
-	while(1) {
-		if(current_task == s->awaiting_sentinel)
-			break;
-
-		current_task->next->prev = current_task->prev;
-		current_task->prev->next = current_task->next;
-
-		task_to_be_freed = current_task;
-		current_task = current_task->next;
-		
-		printf("Freeing task %c...\n", task_to_be_freed->name);
-		free(task_to_be_freed);
-	} 
-
-	printf("Stopping system...\b");
-}
-
-void reset(struct system *s) {
-	
-	// Freeing awaiting queue
-	
-	struct task * current_task = s->awaiting_sentinel->next;
-	struct task * task_to_be_freed;
-	while(1) {
-		if(current_task == s->awaiting_sentinel)
-			break;
-
-		current_task->next->prev = current_task->prev;
-		current_task->prev->next = current_task->next;
-
-		task_to_be_freed = current_task;
-		current_task = current_task->next;
-		
-		printf("Freeing task %c...\n", task_to_be_freed->name);
-		free(task_to_be_freed);
-	} 
-	
-	
-
-};
-*/
