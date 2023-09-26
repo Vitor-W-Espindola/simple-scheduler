@@ -109,7 +109,8 @@ void add_to_execution(struct system *s, struct task *t) {
 
 void process_task(struct task* t, struct system *s) {
 	
-	// Processing a task means adding it to the awaiting queue if its arrival time != 0 or adding it to the execution queue if its arrival time == 0
+	// Processing a task is done in the reading of the input and means adding the read task to the awaiting queue (while ordering by arrival time) if its arrival time != 0 
+	// or add it to the execution queue (while ordering by priority) if its arrival time == 0.
 	// Processing atask also means allocating a new scheduling queue for its priority level and scheduling politic (FIFO or RR) and adding the task to it.
 	// Obs.: If there is already a scheduling queue for its priority level, the task is simply appended to it
 	
@@ -199,7 +200,7 @@ struct task ** check_for_arriving_tasks(struct system *s, int * len) {
 					arriving_tasks = realloc(arriving_tasks, (++(*(len))) * sizeof(struct task *));
 					arriving_tasks[i] = current_task;
 					i++;
-				}
+				} else break;
 			}
 			current_task = current_task->next;
 		}
@@ -308,7 +309,7 @@ char *run(struct system *s) {
 	// where at the end of any completed cycle the task name is appended to the string which represents the scale of execution. 
 	//
 	// A cycle can be summarized as follows:
-	// - Gather all arriving tasks (arrival time = 0) from awaiting queue and the ending task (computation = 0), if there is any, from execution queue;
+	// - Gather all arriving tasks (arrival time == 0) from awaiting queue and the ending task (computation == 0), if there is any, from execution queue;
 	// - Remove those arriving tasks from awaiting queue and move all to execution queue while ordering it by priority.
 	// - Decrement by one the arrival time of all those tasks which remained on the arriving queue.
 	// - Remove the ending task from the execution queue. This also means removing this task from its scheduling queue.
