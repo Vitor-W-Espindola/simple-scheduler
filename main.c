@@ -45,7 +45,7 @@ int main() {
 		
 		for(i = 0; i < len; i++) {
 			struct task *t = malloc(sizeof(struct task));
-			t->name = (97 + i);
+			t->name = (65 + i);
 			
 			scanf("%d %d %d %d", &(t->c), &(t->a), &(t->p), &(t->pol));
 			
@@ -55,7 +55,7 @@ int main() {
 		// Have the initial conditions been set, all queues correctly created and tasks appended to them, the system is now ready to run.
 		out = run(s);
 		
-		printf("output: %s\n\n", out);
+		printf("%s\n\n", out);
 
 		free(out);
 	}

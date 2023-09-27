@@ -105,29 +105,6 @@ void add_to_execution(struct system *s, struct task *t) {
 		current_task = current_task->next;
 	}
 
-}
-
-void process_task(struct task* t, struct system *s) {
-	
-	// Processing a task is done in the reading of the input and means adding the read task to the awaiting queue (while ordering by arrival time) if its arrival time != 0 
-	// or add it to the execution queue (while ordering by priority) if its arrival time == 0.
-	// Processing atask also means allocating a new scheduling queue for its priority level and scheduling politic (FIFO or RR) and adding the task to it.
-	// Obs.: If there is already a scheduling queue for its priority level, the task is simply appended to it
-	
-	if(t->a > 0) add_to_awaiting(s, t);
-	else add_to_execution(s, t);
-
-	// About scheduling queue and scheduling nodes: the system has a scheduling queue sentinel that can lead to all the scheduling queues created on this processes,
-	// each with its respective priority level and scheduling policy. Each scheduling queue, therefore, has a scheduling node sentinel that can lead to all members of this
-	// scheduling queue. However, these members are not tasks themselves, but scheduling nodes. As a matter of fact, a scheduling node represents a task in this context of
-	// scheduling queues, such is that a scheduling node has only a pointer to the task it represents.
-	//
-	// Obs.: The system was actually built that way because of two simple reasons: (1) bad software project planning, (2) arriving queue and execution queue are actually disjoint sets,
-	// which means that a task having pointers to its previous and next elements do not imply inconsistence, given a task is either on one or the other queue at any point in time. 
-	// However this does not occur with scheduling queues, given that, at any point in time, a task might be either at awaiting or execution queue, but always in a scheduling queue, which implies 
-	// they must have two different entities to represent their previous and next elements in the different queues, which will not ever be the same for both queues. 
-	// That is why scheduling nodes are required.
-
 	struct scheduling_queue *current_sq = s->scheduling_sentinels->next;
 	while(1) {
 		if(current_sq == s->scheduling_sentinels) {
@@ -182,6 +159,29 @@ void process_task(struct task* t, struct system *s) {
 			} else current_sq = current_sq->next;
 		}
 	}
+
+}
+
+void process_task(struct task* t, struct system *s) {
+	
+	// Processing a task is done in the reading of the input and means adding the read task to the awaiting queue (while ordering by arrival time) if its arrival time != 0 
+	// or add it to the execution queue (while ordering by priority) if its arrival time == 0.
+	// Processing atask also means allocating a new scheduling queue for its priority level and scheduling politic (FIFO or RR) and adding the task to it.
+	// Obs.: If there is already a scheduling queue for its priority level, the task is simply appended to it
+	
+	if(t->a > 0) add_to_awaiting(s, t);
+	else add_to_execution(s, t);
+
+	// About scheduling queue and scheduling nodes: the system has a scheduling queue sentinel that can lead to all the scheduling queues created on this processes,
+	// each with its respective priority level and scheduling policy. Each scheduling queue, therefore, has a scheduling node sentinel that can lead to all members of this
+	// scheduling queue. However, these members are not tasks themselves, but scheduling nodes. As a matter of fact, a scheduling node represents a task in this context of
+	// scheduling queues, such is that a scheduling node has only a pointer to the task it represents.
+	//
+	// Obs.: The system was actually built that way because of two simple reasons: (1) bad software project planning, (2) arriving queue and execution queue are actually disjoint sets,
+	// which means that a task having pointers to its previous and next elements do not imply inconsistence, given a task is either on one or the other queue at any point in time. 
+	// However this does not occur with scheduling queues, given that, at any point in time, a task might be either at awaiting or execution queue, but always in a scheduling queue, which implies 
+	// they must have two different entities to represent their previous and next elements in the different queues, which will not ever be the same for both queues. 
+	// That is why scheduling nodes are required.
 }
 
 struct task ** check_for_arriving_tasks(struct system *s, int * len) {
@@ -209,7 +209,18 @@ struct task ** check_for_arriving_tasks(struct system *s, int * len) {
 }
 
 struct task * check_for_ending_task(struct system *s) {
-		return s->execution_sentinel->next != NULL && s->execution_sentinel->next->c == 0 ? s->execution_sentinel->next : NULL;
+		
+		struct task *current_task = s->execution_sentinel->next;
+		while(1) {
+			if(current_task == s->execution_sentinel) {
+				break;
+			} else {
+				if(current_task->c == 0)
+					return current_task;
+			}
+			current_task = current_task->next;
+		}
+		return NULL;		
 }
 
 
@@ -256,6 +267,10 @@ void remove_from_execution(struct system *s, struct task *t) {
 struct task * interrogate_scheduling_queue(struct system *s, struct task *t) {
 	struct task * to_be_runned;
 	struct scheduling_queue *current_sq = s->scheduling_sentinels->next;
+	
+
+	int i, len_a;
+	struct task ** arriving_tasks = check_for_arriving_tasks(s, &len_a);
 	while(1) {
 		if(current_sq == s->scheduling_sentinels) {	
 			break;
@@ -265,24 +280,47 @@ struct task * interrogate_scheduling_queue(struct system *s, struct task *t) {
 				if(current_sn->t->pol == 1) {
 				// FIFO - Only returns the first element of the scheduling queue, without moving it; 
 					to_be_runned = current_sn->t;
+					for(i = 0; i < len_a; i++)
+						move_to_execution(s, arriving_tasks[i]);	
+					
 				} else if(current_sn->t->pol == 2) {
 				// RR - Unlike FIFO, Round-Robin returns the first element but moves it to the end of the queue.
-					to_be_runned = current_sq->scheduling_sentinel->next->t;
-					if (current_sn->next != current_sq->scheduling_sentinel) {
-						current_sn->next->prev = current_sq->scheduling_sentinel;
-						current_sq->scheduling_sentinel->prev->next = current_sn;
+					to_be_runned = current_sn->t;
+					//if (current_sn->next != current_sq->scheduling_sentinel) {
 
-						current_sq->scheduling_sentinel->next = current_sn->next;
-						current_sn->next = current_sq->scheduling_sentinel;
-						
-						current_sn->prev = current_sq->scheduling_sentinel->prev;
-						current_sq->scheduling_sentinel->prev = current_sn;
+					// Remove temporarily from scheduling queue
+					current_sn->next->prev = current_sn->prev;
+					current_sn->prev->next = current_sn->next;
+
+					// Receive new tasks
+					for(i = 0; i < len_a; i++) {
+						move_to_execution(s, arriving_tasks[i]);
+						printf("arrived tasked: %c\n", arriving_tasks[i]->name);
 					}
+					// Put back to end of queue
+					current_sn->next = current_sq->scheduling_sentinel;
+					current_sn->prev = current_sq->scheduling_sentinel->prev;
+					
+					current_sq->scheduling_sentinel->prev->next = current_sn;
+					current_sq->scheduling_sentinel->prev = current_sn;
+
+					/*
+					current_sn->next->prev = current_sq->scheduling_sentinel;
+					current_sq->scheduling_sentinel->prev->next = current_sn;
+
+					current_sq->scheduling_sentinel->next = current_sn->next;
+					current_sn->next = current_sq->scheduling_sentinel;
+					
+					current_sn->prev = current_sq->scheduling_sentinel->prev;
+					current_sq->scheduling_sentinel->prev = current_sn;
+					*/
+					//}
 				} else	to_be_runned = NULL;
 			       	break;
 			} else current_sq = current_sq->next;
 		}
-	}
+	}	
+	free(arriving_tasks);
 	return to_be_runned;	
 }
 
@@ -324,9 +362,12 @@ char *run(struct system *s) {
 	char *out = malloc(out_len);
 
 	while(1) {
+		/*	
+		print_awaiting(s);	
+		print_execution(s);
+		print_scheduling_queues(s);
+		*/
 
-		int i, len_a;
-		struct task ** arriving_tasks = check_for_arriving_tasks(s, &len_a);
 		struct task * ending_task = check_for_ending_task(s);
 		
 		char running_name;
@@ -335,9 +376,6 @@ char *run(struct system *s) {
 		struct task * running;
 		struct task * to_be_runned;
 
-		for(i = 0; i < len_a; i++)
-			move_to_execution(s, arriving_tasks[i]);
-		
 		if(ending_task != NULL)
 			remove_from_execution(s, ending_task);	
 
@@ -352,22 +390,28 @@ char *run(struct system *s) {
 		
 		if(running == s->execution_sentinel) {
 			if(s->awaiting_sentinel->next == s->awaiting_sentinel) running_name = 1;
-			else running_name = '.';
+			else  {
+				int i = 0, len_a = 0;
+				struct task ** arriving_tasks = check_for_arriving_tasks(s, &len_a);
+				// Receive new tasks
+				for(i = 0; i < len_a; i++)
+					move_to_execution(s, arriving_tasks[i]);
+				
+				running_name = '.';
+			}
 		} else {
-			to_be_runned = interrogate_scheduling_queue(s, running);
-			if(to_be_runned != running) {
+			to_be_runned = interrogate_scheduling_queue(s, running);		
+			/*if(to_be_runned != running) {
 				to_be_runned->prev->next = to_be_runned->next;
 				to_be_runned->next->prev = to_be_runned->prev;
 				to_be_runned->prev = s->execution_sentinel;
 				to_be_runned->next = running;
 				running->prev = to_be_runned;
 				s->execution_sentinel->next = to_be_runned;
-			}
+			}*/
 			(to_be_runned->c)--;
 			running_name = to_be_runned->name;
 		}
-		
-		free(arriving_tasks);
 
 		if(running_name == 1) break;
 
