@@ -293,10 +293,9 @@ struct task * interrogate_scheduling_queue(struct system *s, struct task *t) {
 					current_sn->prev->next = current_sn->next;
 
 					// Receive new tasks
-					for(i = 0; i < len_a; i++) {
+					for(i = 0; i < len_a; i++)
 						move_to_execution(s, arriving_tasks[i]);
-						printf("arrived tasked: %c\n", arriving_tasks[i]->name);
-					}
+					
 					// Put back to end of queue
 					current_sn->next = current_sq->scheduling_sentinel;
 					current_sn->prev = current_sq->scheduling_sentinel->prev;
@@ -417,7 +416,6 @@ char *run(struct system *s) {
 
 		out = realloc(out, ++out_len);
 		out[out_index++] = running_name;
-		
 
 	}
 

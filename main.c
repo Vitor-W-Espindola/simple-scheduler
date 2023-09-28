@@ -60,7 +60,6 @@ int main() {
 		free(out);
 	}
 
-	printf("\nHello, World!\n");
 	return 0;
 
 }
